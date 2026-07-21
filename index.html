@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JGA Punkte-Tracker</title>
+<style>
+  :root {
+    --bg: #14101f;
+    --card: #1f1830;
+    --card2: #2a2140;
+    --accent: #ff5da2;
+    --accent2: #7b5cff;
+    --good: #38d39f;
+    --warn: #ffb454;
+    --text: #f3eefe;
+    --muted: #a99fc4;
+    --danger: #ff6b6b;
+    --line: #3a2f55;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px 14px 60px;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .card {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+  }
+  .progress-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .score {
+    font-size: 40px; font-weight: 800; line-height: 1;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .score small { font-size: 18px; color: var(--muted); -webkit-text-fill-color: var(--muted); font-weight: 600; }
+  .bar { height: 16px; background: var(--card2); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  .bar > div {
+    height: 100%; width: 0;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width .5s ease;
+  }
+  .reached .bar > div { background: linear-gradient(90deg, var(--good), #6ee7b7); }
+  .remain { font-size: 13px; margin-top: 8px; }
+  .name-row { display:flex; align-items:center; gap:8px; }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 12px;
+    padding: 10px 14px; font-weight: 600; color: #fff;
+    background: var(--accent2);
+  }
+  button.pink { background: var(--accent); }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  button.small { padding: 6px 10px; font-size: 13px; border-radius: 10px; }
+  button.icon { background: transparent; padding: 4px 8px; font-size: 18px; color: var(--text); }
+  button.danger { background: transparent; color: var(--danger); border: 1px solid var(--line); }
+  button:active { transform: scale(.97); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spread { justify-content: space-between; }
+  .tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
+  .tabs button { flex: 1; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+  .tabs button.active { background: var(--accent2); color: #fff; border-color: transparent; }
+  .game { background: var(--card2); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+  .game.open { outline: 1px solid var(--accent2); }
+  .ghead { cursor: pointer; }
+  .chev { color: var(--muted); font-size: 12px; }
+  .game .title { font-weight: 700; }
+  .game .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .rounds { margin: 10px 0 0; padding: 0; list-style: none; }
+  .rounds li { display: flex; justify-content: space-between; align-items:center; gap:8px; padding: 8px 0; border-top: 1px dashed var(--line); font-size: 14px; cursor: pointer; }
+  .rounds li .rtitle { font-weight: 600; }
+  .pts { font-weight: 700; }
+  .pts.strafe { color: var(--warn); }
+  .badge { font-size: 11px; background: var(--accent); padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+  .subtotal { font-weight: 700; color: var(--good); }
+  .hist { list-style: none; padding: 0; margin: 0; }
+  .hist li { display: flex; justify-content: space-between; align-items:center; gap:8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .hist .when { font-size: 11px; color: var(--muted); }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+  .overlay.show { display: flex; }
+  .modal { background: var(--card); width: 100%; max-width: 640px; border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin-bottom: 6px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card2); color: var(--text); font: inherit;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  .switch { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .switch input { width: 20px; height: 20px; }
+  .seg { display:flex; gap:6px; margin-top:6px; flex-wrap: wrap; }
+  .seg button { flex:1; min-width: 60px; background: var(--card2); border:1px solid var(--line); color: var(--muted); }
+  .seg button.on { background: var(--accent2); color:#fff; border-color: transparent; }
+  .seg.strafe button.on { background: var(--warn); color:#221a10; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .modal-actions button { flex: 1; }
+  .hidden { display: none !important; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color:#fff; padding: 10px 16px; border-radius: 12px; opacity: 0; transition: opacity .3s; z-index: 100; font-size: 14px; }
+  #toast.show { opacity: .95; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+  <div class="card" id="progressCard">
+    <div class="progress-head">
+      <div>
+        <div class="name-row">
+          <h1 id="bachelorName">Junggeselle</h1>
+          <button class="icon" id="editSettings" title="Bearbeiten">⚙️</button>
+        </div>
+        <div class="score" style="margin-top:6px;"><span id="totalPts">0</span><small> / <span id="targetPts">500</span></small></div>
+      </div>
+    </div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="remain muted" id="remainText"></div>
+    <div class="row" style="margin-top:14px;">
+      <button class="pink small" id="btnStrafe">😈 Strafe: Ziel erhöhen</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="games" class="active">🎮 Spiele</button>
+    <button data-tab="history">📜 Verlauf</button>
+  </div>
+
+  <div id="tab-games">
+    <div class="row spread" style="margin-bottom:10px;">
+      <h2 style="margin:0;">Spiele</h2>
+      <button class="small" id="btnNewGame">+ Neues Spiel</button>
+    </div>
+    <div id="gamesList"></div>
+  </div>
+
+  <div id="tab-history" class="hidden">
+    <div class="row spread" style="margin-bottom:10px;">
+      <h2 style="margin:0;">Verlauf</h2>
+      <button class="danger small" id="btnUndo">↩︎ Letzten rückgängig</button>
+    </div>
+    <div class="card"><ul class="hist" id="histList"></ul></div>
+  </div>
+
+  <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+  <div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://wyhudxqyxymizoevlpak.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_JwB8aSA7m_0IooDfiykieQ_DyG7C8bJ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let settings = { id:1, bachelor_name:'Junggeselle', target_score:500 };
+let games = [];
+let entries = [];
+let prevTotal = 0, prevTarget = 0;
+let firstLoad = true;
+let openGameId = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eff = e => (e.points||0) * (e.multiplier||1);
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+async function loadAll(){
+  try {
+    const [s,g,e] = await Promise.all([
+      sb.from('settings').select('*').eq('id',1).maybeSingle(),
+      sb.from('games').select('*'),
+      sb.from('entries').select('*').order('created_at',{ascending:true})
+    ]);
+    if (s.error) throw s.error;
+    if (g.error) throw g.error;
+    if (e.error) throw e.error;
+    if (s.data) settings = s.data;
+    games = g.data || [];
+    entries = e.data || [];
+    render();
+  } catch(err){
+    console.error(err);
+    toast('Verbindungsfehler – neu laden?');
+  }
+}
+
+function sortedGames(){
+  return [...games].sort((a,b)=>{
+    const sa = a.sort_order==null ? 1e9 : a.sort_order;
+    const sbb = b.sort_order==null ? 1e9 : b.sort_order;
+    if (sa!==sbb) return sa-sbb;
+    return new Date(a.created_at)-new Date(b.created_at);
+  });
+}
+function totalPoints(){ return entries.filter(e=>e.result_type==='punkte').reduce((a,e)=>a+eff(e),0); }
+function penaltyTotal(){ return entries.reduce((a,e)=>a+(e.target_delta||0),0); }
+function effTarget(){ return (settings.target_score||0) + penaltyTotal(); }
+function gameEntries(id){ return entries.filter(e=>e.game_id===id).sort((a,b)=>(a.round_no||0)-(b.round_no||0)); }
+function gameSubtotal(id){ return gameEntries(id).filter(e=>e.result_type==='punkte').reduce((a,e)=>a+eff(e),0); }
+function roundTitle(e, pos){ if (e.title && e.title.trim()) return esc(e.title); if (pos!=null) return 'Runde '+pos; return 'Runde '+(e.round_no!=null?e.round_no:''); }
+function valueHtml(e){
+  if (e.result_type==='strafe') return '<span class="pts strafe">Strafe +'+(e.target_delta||0)+'</span>';
+  if (e.result_type==='punkte'){ const j=(e.multiplier||1)>1?'<span class="badge">🃏 ×'+e.multiplier+'</span>':''; return '<span class="pts">'+eff(e)+'</span>'+j; }
+  return '<span class="muted">offen</span>';
+}
+
+function render(){
+  const total = totalPoints();
+  const target = effTarget();
+  $('#bachelorName').textContent = settings.bachelor_name || 'Junggeselle';
+  $('#totalPts').textContent = total;
+  $('#targetPts').textContent = target;
+  const pct = target>0 ? Math.max(0, Math.min(100, total/target*100)) : 0;
+  $('#barFill').style.width = pct + '%';
+  const reached = target>0 && total>=target;
+  $('#progressCard').classList.toggle('reached', reached);
+  const pen = penaltyTotal();
+  const penNote = pen>0 ? ' (inkl. +'+pen+' Strafe)' : '';
+  $('#remainText').textContent = reached ? '🎉 Ziel erreicht!' : (target>0 ? ('Noch ' + (target-total) + ' Punkte bis zum Ziel'+penNote) : 'Kein Ziel gesetzt');
+
+  if (!firstLoad && prevTotal < prevTarget && total >= target && target>0) celebrate();
+  prevTotal = total; prevTarget = target; firstLoad = false;
+
+  renderGames();
+  renderHistory();
+}
+
+function renderGames(){
+  const el = $('#gamesList');
+  const gs = sortedGames();
+  if (!gs.length){ el.innerHTML = '<div class="empty">Noch keine Spiele. Leg oben eins an. 🎯</div>'; return; }
+  el.innerHTML = gs.map((g, idx) => {
+    const rs = gameEntries(g.id);
+    const isOpen = g.id===openGameId;
+    const rows = rs.map((e,i) =>
+      '<li data-editentry="'+e.id+'"><span class="rtitle">'+roundTitle(e,i+1)+'</span>'
+      + '<span class="row">'+valueHtml(e)+'<button class="icon" data-del="'+e.id+'">🗑️</button></span></li>'
+    ).join('');
+    const up = idx>0 ? '<button class="icon" data-moveup="'+g.id+'" title="nach oben">▲</button>' : '<span style="width:34px;display:inline-block;"></span>';
+    const down = idx<gs.length-1 ? '<button class="icon" data-movedown="'+g.id+'" title="nach unten">▼</button>' : '<span style="width:34px;display:inline-block;"></span>';
+    const desc = (isOpen && g.description) ? '<div class="sub">'+esc(g.description)+'</div>' : '';
+    const meta = '<div class="sub">'+rs.length+' Runde'+(rs.length===1?'':'n')+' · Σ '+gameSubtotal(g.id)+' Pkt</div>';
+    const chev = '<span class="chev">'+(isOpen?'▾':'▸')+'</span> ';
+    const body = isOpen
+      ? ( (rows ? '<ul class="rounds">'+rows+'</ul>' : '<div class="sub" style="margin-top:8px;">Noch keine Runden – füg unten welche hinzu.</div>')
+          + '<div class="row spread" style="margin-top:10px;"><span class="subtotal">Σ '+gameSubtotal(g.id)+' Pkt</span>'
+          + '<button class="pink small" data-addround="'+g.id+'">+ Runde</button></div>' )
+      : '';
+    return '<div class="game'+(isOpen?' open':'')+'">'
+      + '<div class="row spread ghead" data-toggle="'+g.id+'"><div style="flex:1;">'+chev+'<span class="title">'+esc(g.title)+'</span>'+meta+desc+'</div>'
+      + '<div class="row" style="gap:2px;">'+up+down+'<button class="icon" data-editgame="'+g.id+'">✏️</button><button class="icon" data-delgame="'+g.id+'">🗑️</button></div></div>'
+      + body
+      + '</div>';
+  }).join('');
+}
+
+function renderHistory(){
+  const el = $('#histList');
+  const list = [...entries].sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+  if (!list.length){ el.innerHTML = '<li class="empty">Noch keine Einträge.</li>'; return; }
+  el.innerHTML = list.map(e => {
+    const g = games.find(x=>x.id===e.game_id);
+    const when = new Date(e.created_at).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const gtitle = g ? esc(g.title)+' · ' : '';
+    return '<li><span>'+gtitle+roundTitle(e)+'<div class="when">'+when+'</div></span>'
+      + '<span class="row">'+valueHtml(e)+'<button class="icon" data-del="'+e.id+'">🗑️</button></span></li>';
+  }).join('');
+}
+
+function celebrate(){
+  const end = Date.now()+1500;
+  (function frame(){
+    confetti({particleCount:6, angle:60, spread:70, origin:{x:0}});
+    confetti({particleCount:6, angle:120, spread:70, origin:{x:1}});
+    if (Date.now()<end) requestAnimationFrame(frame);
+  })();
+}
+
+function openModal(html){ $('#modal').innerHTML = html; $('#overlay').classList.add('show'); }
+function closeModal(){ $('#overlay').classList.remove('show'); }
+$('#overlay').addEventListener('click', e => { if (e.target.id==='overlay') closeModal(); });
+
+// Neues Spiel – inkl. optionaler Runden (nur Titel, Punkte später)
+function newGameModal(){
+  openModal(`
+    <h2>Neues Spiel</h2>
+    <label>Titel des Spiels</label>
+    <input type="text" id="g_title" placeholder="z. B. Bierpong" />
+    <label>Beschreibung (optional)</label>
+    <textarea id="g_desc" placeholder="Regeln, Notiz …"></textarea>
+    <label>Mögliche Punktzahl pro Runde (optional – wird beim Eintragen als Vorschlag übernommen)</label>
+    <input type="number" id="g_points" min="0" placeholder="z. B. 10" />
+    <label>Runden (optional – eine pro Zeile, Punkte trägst du später ein)</label>
+    <textarea id="g_rounds" placeholder="z. B.&#10;Runde 1&#10;Runde 2&#10;Elfmeterschießen"></textarea>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal()">Abbrechen</button>
+      <button id="g_save">Speichern</button>
+    </div>
+  `);
+  $('#g_save').addEventListener('click', async ()=>{
+    const title = $('#g_title').value.trim();
+    if (!title){ toast('Bitte einen Titel eingeben'); return; }
+    const nextOrder = games.length;
+    const sp = $('#g_points').value.trim(); const spVal = sp===''?null:Math.max(0,parseInt(sp,10));
+    const { data, error } = await sb.from('games').insert({ title, description: $('#g_desc').value.trim()||null, suggested_points: spVal, sort_order: nextOrder }).select().single();
+    if (error){ toast('Fehler beim Speichern'); console.error(error); return; }
+    const lines = $('#g_rounds').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    if (lines.length){
+      const rows = lines.map((t,i)=>({ game_id:data.id, round_no:i+1, title:t, result_type:'offen', points:0, target_delta:0, multiplier:1 }));
+      const r = await sb.from('entries').insert(rows);
+      if (r.error){ toast('Spiel ok, Runden-Fehler'); console.error(r.error); }
+    }
+    closeModal(); toast('Spiel angelegt ✅'); loadAll();
+  });
+}
+
+// Runde anlegen ODER bearbeiten: Titel oben, darunter offen / Punkte / Strafe
+function roundModal(gameId, entryId){
+  const g = games.find(x=>x.id===gameId); if(!g) return;
+  const existing = entryId ? entries.find(e=>e.id===entryId) : null;
+  const ge = gameEntries(g.id);
+  const idx = existing ? ge.findIndex(e=>e.id===existing.id) : ge.length;
+  const posLabel = idx+1;
+  const storeRoundNo = existing ? existing.round_no : (Math.max(0, ...ge.map(e=>e.round_no||0))+1);
+  const curTitle = existing ? (existing.title||'') : '';
+  const curType = existing ? existing.result_type : 'offen';
+  const roundSug = (existing && existing.suggested_points!=null) ? existing.suggested_points : null;
+  const gameSug = (g.suggested_points!=null) ? g.suggested_points : null;
+  const possible = roundSug!=null ? roundSug : gameSug;
+  const curPts = (existing && existing.result_type==='punkte' && existing.points!=null) ? existing.points : (possible!=null ? possible : '');
+  const curJoker = existing && (existing.multiplier||1)>1;
+  const curStrafe = existing && existing.result_type==='strafe' ? existing.target_delta : 10;
+  openModal(`
+    <h2>${esc(g.title)} · Runde ${posLabel}</h2>
+    <label>Titel der Runde</label>
+    <input type="text" id="r_title" value="${esc(curTitle)}" placeholder="z. B. Bierpong / Frage 1" />
+
+    <label>Mögliche Punkte in dieser Runde</label>
+    <div id="r_possible" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:700;">${possible!=null?(possible+' Punkte'):'–'}</div>
+
+    <label>Ergebnis</label>
+    <div class="seg" id="r_typeSeg">
+      <button type="button" data-t="offen">⏳ Offen</button>
+      <button type="button" data-t="punkte">✅ Punkte</button>
+      <button type="button" data-t="strafe">😖 Strafe</button>
+    </div>
+
+    <div id="box_pts" class="hidden">
+      <label>Vergebene Punkte</label>
+      <input type="number" id="r_pts" min="0" value="${curPts}" placeholder="z. B. 10" />
+      <div class="switch"><input type="checkbox" id="r_joker" ${curJoker?'checked':''} /><label style="margin:0;">🃏 Joker – doppelte Punkte (×2)</label></div>
+    </div>
+
+    <div id="box_strafe" class="hidden">
+      <label>Strafpunkte (erhöhen das Ziel)</label>
+      <div class="seg strafe" id="r_strafeSeg">
+        <button type="button" data-s="2">+2</button>
+        <button type="button" data-s="10">+10</button>
+        <button type="button" data-s="20">+20</button>
+      </div>
+      <label>Oder eigener Wert</label>
+      <input type="number" id="r_strafeCustom" min="1" placeholder="optional" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal()">Abbrechen</button>
+      <button id="r_save">Speichern</button>
+    </div>
+  `);
+  let type = curType || 'offen';
+  let strafe = curStrafe || 10;
+  function paintType(){
+    $('#r_typeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.t===type));
+    $('#box_pts').classList.toggle('hidden', type!=='punkte');
+    $('#box_strafe').classList.toggle('hidden', type!=='strafe');
+  }
+  function paintStrafe(){
+    $('#r_strafeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on', parseInt(b.dataset.s,10)===strafe));
+  }
+  $('#r_typeSeg').addEventListener('click', ev=>{ const b=ev.target.closest('[data-t]'); if(!b)return; type=b.dataset.t; paintType(); });
+  $('#r_strafeSeg').addEventListener('click', ev=>{ const b=ev.target.closest('[data-s]'); if(!b)return; strafe=parseInt(b.dataset.s,10); $('#r_strafeCustom').value=''; paintStrafe(); });
+  paintType(); paintStrafe();
+
+  $('#r_save').addEventListener('click', async ()=>{
+    const payload = { game_id:g.id, round_no:storeRoundNo, title:$('#r_title').value.trim()||null, result_type:type, points:0, multiplier:1, target_delta:0, suggested_points: possible!=null?possible:null };
+    if (type==='punkte'){
+      const v = parseInt($('#r_pts').value,10);
+      if (isNaN(v)||v<0){ toast('Bitte gültige Punkte (0 oder mehr)'); return; }
+      payload.points = v; payload.multiplier = $('#r_joker').checked ? 2 : 1;
+    } else if (type==='strafe'){
+      const custom = parseInt($('#r_strafeCustom').value,10);
+      payload.target_delta = (!isNaN(custom)&&custom>0) ? custom : strafe;
+    }
+    let error;
+    if (existing) ({ error } = await sb.from('entries').update(payload).eq('id', existing.id));
+    else ({ error } = await sb.from('entries').insert(payload));
+    if (error){ toast('Fehler beim Speichern'); console.error(error); return; }
+    closeModal(); toast('Gespeichert ✅'); loadAll();
+  });
+}
+
+function gameEditModal(gameId){
+  const g = games.find(x=>x.id===gameId); if(!g) return;
+  openModal(`
+    <h2>Spiel bearbeiten</h2>
+    <label>Titel des Spiels</label>
+    <input type="text" id="ge_title" value="${esc(g.title)}" />
+    <label>Beschreibung (optional)</label>
+    <textarea id="ge_desc">${esc(g.description||'')}</textarea>
+    <label>Mögliche Punktzahl pro Runde (Vorschlag)</label>
+    <input type="number" id="ge_points" min="0" value="${g.suggested_points!=null?g.suggested_points:''}" placeholder="z. B. 10" />
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal()">Abbrechen</button>
+      <button id="ge_save">Speichern</button>
+    </div>
+  `);
+  $('#ge_save').addEventListener('click', async ()=>{
+    const title = $('#ge_title').value.trim(); if(!title){ toast('Titel fehlt'); return; }
+    const sp = $('#ge_points').value.trim(); const spVal = sp===''?null:Math.max(0,parseInt(sp,10));
+    const { error } = await sb.from('games').update({ title, description:$('#ge_desc').value.trim()||null, suggested_points: spVal }).eq('id', g.id);
+    if (error){ toast('Fehler beim Speichern'); console.error(error); return; }
+    closeModal(); toast('Gespeichert ✅'); loadAll();
+  });
+}
+
+function settingsModal(){
+  openModal(`
+    <h2>Einstellungen</h2>
+    <label>Name des Junggesellen</label>
+    <input type="text" id="s_name" value="${esc(settings.bachelor_name||'')}" />
+    <label>Basis-Zielpunktzahl</label>
+    <input type="number" id="s_target" min="0" value="${settings.target_score||0}" />
+    <p class="muted" style="font-size:12px;">Strafpunkte kommen automatisch oben drauf.</p>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal()">Abbrechen</button>
+      <button id="s_save">Speichern</button>
+    </div>
+  `);
+  $('#s_save').addEventListener('click', async ()=>{
+    const name = $('#s_name').value.trim() || 'Junggeselle';
+    const target = parseInt($('#s_target').value,10); if (isNaN(target)){ toast('Ziel ungültig'); return; }
+    const { error } = await sb.from('settings').update({ bachelor_name:name, target_score:target }).eq('id',1);
+    if (error){ toast('Fehler beim Speichern'); console.error(error); return; }
+    closeModal(); toast('Gespeichert ✅'); loadAll();
+  });
+}
+
+function strafeModal(){
+  openModal(`
+    <h2>😈 Strafe: Ziel erhöhen</h2>
+    <p class="muted" style="font-size:14px;">Das Ziel wandert nach oben – schwerer zu erreichen.</p>
+    <div class="seg strafe" id="ovSeg">
+      <button type="button" data-s="2" class="on">+2</button>
+      <button type="button" data-s="10">+10</button>
+      <button type="button" data-s="20">+20</button>
+    </div>
+    <label>Oder eigener Wert</label>
+    <input type="number" id="p_amt" min="1" placeholder="z. B. 50" />
+    <label>Notiz (optional)</label>
+    <input type="text" id="p_note" placeholder="wofür?" />
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal()">Abbrechen</button>
+      <button class="pink" id="p_save">Ziel erhöhen</button>
+    </div>
+  `);
+  let sel = 2;
+  $('#ovSeg').addEventListener('click', ev => {
+    const b = ev.target.closest('[data-s]'); if(!b) return;
+    sel = parseInt(b.dataset.s,10);
+    $('#ovSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); $('#p_amt').value='';
+  });
+  $('#p_save').addEventListener('click', async ()=>{
+    const custom = parseInt($('#p_amt').value,10);
+    const amt = !isNaN(custom) && custom>0 ? custom : sel;
+    if (isNaN(amt) || amt<=0){ toast('Zahl eingeben'); return; }
+    const { error } = await sb.from('entries').insert({ game_id:null, round_no:null, title: $('#p_note').value.trim()||'Overall-Strafe', result_type:'strafe', points:0, multiplier:1, target_delta:amt });
+    if (error){ toast('Fehler'); console.error(error); return; }
+    closeModal(); toast('Ziel um '+amt+' erhöht 😈'); loadAll();
+  });
+}
+
+async function moveGame(id, dir){
+  const gs = sortedGames();
+  const i = gs.findIndex(g=>g.id===id);
+  const j = i+dir;
+  if (i<0 || j<0 || j>=gs.length) return;
+  const tmp = gs[i]; gs[i]=gs[j]; gs[j]=tmp;
+  const { error } = await Promise.all(gs.map((g,idx)=> sb.from('games').update({sort_order:idx}).eq('id',g.id)))
+    .then(()=>({error:null})).catch(e=>({error:e}));
+  if (error){ toast('Fehler beim Sortieren'); console.error(error); return; }
+  loadAll();
+}
+
+async function deleteEntry(id, ask=true){
+  if (ask && !confirm('Diesen Eintrag wirklich löschen?')) return;
+  const { error } = await sb.from('entries').delete().eq('id', id);
+  if (error){ toast('Fehler beim Löschen'); console.error(error); return; }
+  toast('Gelöscht'); loadAll();
+}
+async function deleteGame(id){
+  if (!confirm('Spiel inkl. aller Runden wirklich löschen?')) return;
+  const { error } = await sb.from('games').delete().eq('id', id);
+  if (error){ toast('Fehler beim Löschen'); console.error(error); return; }
+  toast('Spiel gelöscht'); loadAll();
+}
+async function undoLast(){
+  if (!entries.length){ toast('Nichts zum Rückgängigmachen'); return; }
+  const last = [...entries].sort((a,b)=> new Date(b.created_at)-new Date(a.created_at))[0];
+  if (!confirm('Letzten Eintrag wirklich rückgängig machen?')) return;
+  deleteEntry(last.id, false);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-addround],[data-editentry],[data-del],[data-delgame],[data-editgame],[data-moveup],[data-movedown],[data-toggle]');
+  if (!t) return;
+  if (t.dataset.toggle){ const id=parseInt(t.dataset.toggle,10); openGameId = (openGameId===id)?null:id; renderGames(); }
+  else if (t.dataset.del) deleteEntry(parseInt(t.dataset.del,10));
+  else if (t.dataset.delgame) deleteGame(parseInt(t.dataset.delgame,10));
+  else if (t.dataset.editgame) gameEditModal(parseInt(t.dataset.editgame,10));
+  else if (t.dataset.moveup) moveGame(parseInt(t.dataset.moveup,10), -1);
+  else if (t.dataset.movedown) moveGame(parseInt(t.dataset.movedown,10), 1);
+  else if (t.dataset.addround) roundModal(parseInt(t.dataset.addround,10), null);
+  else if (t.dataset.editentry){ const en=entries.find(x=>x.id===parseInt(t.dataset.editentry,10)); if(en) roundModal(en.game_id, en.id); }
+});
+$('#btnNewGame').addEventListener('click', newGameModal);
+$('#editSettings').addEventListener('click', settingsModal);
+$('#btnStrafe').addEventListener('click', strafeModal);
+$('#btnUndo').addEventListener('click', undoLast);
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', ()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  const tab = b.dataset.tab;
+  $('#tab-games').classList.toggle('hidden', tab!=='games');
+  $('#tab-history').classList.toggle('hidden', tab!=='history');
+}));
+
+sb.channel('realtime-all')
+  .on('postgres_changes', { event:'*', schema:'public', table:'settings' }, loadAll)
+  .on('postgres_changes', { event:'*', schema:'public', table:'games' }, loadAll)
+  .on('postgres_changes', { event:'*', schema:'public', table:'entries' }, loadAll)
+  .subscribe();
+
+loadAll();
+</script>
+</body>
+</html>
