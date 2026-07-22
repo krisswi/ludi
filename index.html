@@ -74,6 +74,7 @@
   .game.open { outline: 1px solid var(--accent2); }
   .ghead { cursor: pointer; }
   .chev { color: var(--muted); font-size: 12px; }
+  .playedhead { cursor: pointer; color: var(--muted); font-weight: 700; padding: 12px 2px 8px; margin-top: 6px; border-top: 1px solid var(--line); }
   .game .title { font-weight: 700; }
   .game .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .rounds { margin: 10px 0 0; padding: 0; list-style: none; }
@@ -165,6 +166,7 @@ let entries = [];
 let prevTotal = 0, prevTarget = 0;
 let firstLoad = true;
 let openGameId = null;
+let showPlayed = false;
 
 const $ = s => document.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -205,10 +207,11 @@ function effTarget(){ return (settings.target_score||0) + penaltyTotal(); }
 function gameEntries(id){ return entries.filter(e=>e.game_id===id).sort((a,b)=>(a.round_no||0)-(b.round_no||0)); }
 function gameSubtotal(id){ return gameEntries(id).filter(e=>e.result_type==='punkte').reduce((a,e)=>a+eff(e),0); }
 function roundTitle(e, pos){ if (e.title && e.title.trim()) return esc(e.title); if (pos!=null) return 'Runde '+pos; return 'Runde '+(e.round_no!=null?e.round_no:''); }
+function possibleOf(e){ if (e.suggested_points!=null) return e.suggested_points; const g=games.find(x=>x.id===e.game_id); return (g&&g.suggested_points!=null)?g.suggested_points:null; }
 function valueHtml(e){
   if (e.result_type==='strafe') return '<span class="pts strafe">Strafe +'+(e.target_delta||0)+'</span>';
-  if (e.result_type==='punkte'){ const j=(e.multiplier||1)>1?'<span class="badge">🃏 ×'+e.multiplier+'</span>':''; return '<span class="pts">'+eff(e)+'</span>'+j; }
-  return '<span class="muted">offen</span>';
+  if (e.result_type==='punkte'){ const j=(e.multiplier||1)>1?'<span class="badge">🃏 ×'+e.multiplier+'</span>':''; return '<span class="pts">'+eff(e)+' P</span>'+j; }
+  const poss=possibleOf(e); return poss!=null ? '<span class="muted">0/'+poss+' P</span>' : '<span class="muted">offen</span>';
 }
 
 function render(){
@@ -232,33 +235,44 @@ function render(){
   renderHistory();
 }
 
+function isGameDone(g){ const rs=gameEntries(g.id); return rs.length>0 && rs.every(e=>e.result_type!=='offen'); }
+function gameCard(g, idx, listLen){
+  const rs = gameEntries(g.id);
+  const isOpen = g.id===openGameId;
+  const rows = rs.map((e,i) =>
+    '<li data-editentry="'+e.id+'"><span class="rtitle">'+roundTitle(e,i+1)+'</span>'
+    + '<span class="row">'+valueHtml(e)+'<button class="icon" data-del="'+e.id+'">🗑️</button></span></li>'
+  ).join('');
+  const up = idx>0 ? '<button class="icon" data-moveup="'+g.id+'" title="nach oben">▲</button>' : '<span style="width:34px;display:inline-block;"></span>';
+  const down = idx<listLen-1 ? '<button class="icon" data-movedown="'+g.id+'" title="nach unten">▼</button>' : '<span style="width:34px;display:inline-block;"></span>';
+  const desc = (isOpen && g.description) ? '<div class="sub">'+esc(g.description)+'</div>' : '';
+  const openCount = rs.filter(e=>e.result_type==='offen').length;
+  const meta = '<div class="sub">'+rs.length+' Runde'+(rs.length===1?'':'n')+(openCount?(' · '+openCount+' offen'):'')+' · Σ '+gameSubtotal(g.id)+' Pkt</div>';
+  const chev = '<span class="chev">'+(isOpen?'▾':'▸')+'</span> ';
+  const body = isOpen
+    ? ( (rows ? '<ul class="rounds">'+rows+'</ul>' : '<div class="sub" style="margin-top:8px;">Noch keine Runden – füg unten welche hinzu.</div>')
+        + '<div class="row spread" style="margin-top:10px;"><span class="subtotal">Σ '+gameSubtotal(g.id)+' Pkt</span>'
+        + '<button class="pink small" data-addround="'+g.id+'">+ Runde</button></div>' )
+    : '';
+  return '<div class="game'+(isOpen?' open':'')+'">'
+    + '<div class="row spread ghead" data-toggle="'+g.id+'"><div style="flex:1;">'+chev+'<span class="title">'+esc(g.title)+'</span>'+meta+desc+'</div>'
+    + '<div class="row" style="gap:2px;">'+up+down+'<button class="icon" data-editgame="'+g.id+'">✏️</button><button class="icon" data-delgame="'+g.id+'">🗑️</button></div></div>'
+    + body
+    + '</div>';
+}
 function renderGames(){
   const el = $('#gamesList');
   const gs = sortedGames();
   if (!gs.length){ el.innerHTML = '<div class="empty">Noch keine Spiele. Leg oben eins an. 🎯</div>'; return; }
-  el.innerHTML = gs.map((g, idx) => {
-    const rs = gameEntries(g.id);
-    const isOpen = g.id===openGameId;
-    const rows = rs.map((e,i) =>
-      '<li data-editentry="'+e.id+'"><span class="rtitle">'+roundTitle(e,i+1)+'</span>'
-      + '<span class="row">'+valueHtml(e)+'<button class="icon" data-del="'+e.id+'">🗑️</button></span></li>'
-    ).join('');
-    const up = idx>0 ? '<button class="icon" data-moveup="'+g.id+'" title="nach oben">▲</button>' : '<span style="width:34px;display:inline-block;"></span>';
-    const down = idx<gs.length-1 ? '<button class="icon" data-movedown="'+g.id+'" title="nach unten">▼</button>' : '<span style="width:34px;display:inline-block;"></span>';
-    const desc = (isOpen && g.description) ? '<div class="sub">'+esc(g.description)+'</div>' : '';
-    const meta = '<div class="sub">'+rs.length+' Runde'+(rs.length===1?'':'n')+' · Σ '+gameSubtotal(g.id)+' Pkt</div>';
-    const chev = '<span class="chev">'+(isOpen?'▾':'▸')+'</span> ';
-    const body = isOpen
-      ? ( (rows ? '<ul class="rounds">'+rows+'</ul>' : '<div class="sub" style="margin-top:8px;">Noch keine Runden – füg unten welche hinzu.</div>')
-          + '<div class="row spread" style="margin-top:10px;"><span class="subtotal">Σ '+gameSubtotal(g.id)+' Pkt</span>'
-          + '<button class="pink small" data-addround="'+g.id+'">+ Runde</button></div>' )
-      : '';
-    return '<div class="game'+(isOpen?' open':'')+'">'
-      + '<div class="row spread ghead" data-toggle="'+g.id+'"><div style="flex:1;">'+chev+'<span class="title">'+esc(g.title)+'</span>'+meta+desc+'</div>'
-      + '<div class="row" style="gap:2px;">'+up+down+'<button class="icon" data-editgame="'+g.id+'">✏️</button><button class="icon" data-delgame="'+g.id+'">🗑️</button></div></div>'
-      + body
-      + '</div>';
-  }).join('');
+  const active = gs.filter(g=>!isGameDone(g));
+  const done = gs.filter(g=>isGameDone(g));
+  let html = active.map((g,i)=>gameCard(g,i,active.length)).join('');
+  if (!active.length) html += '<div class="empty">Keine offenen Spiele. 🎯</div>';
+  if (done.length){
+    html += '<div class="playedhead" data-toggleplayed="1"><span class="chev">'+(showPlayed?'▾':'▸')+'</span> ✅ Bereits gespielt ('+done.length+')</div>';
+    if (showPlayed) html += done.map((g,i)=>gameCard(g,i,done.length)).join('');
+  }
+  el.innerHTML = html;
 }
 
 function renderHistory(){
@@ -333,8 +347,8 @@ function roundModal(gameId, entryId){
   const curType = existing ? existing.result_type : 'offen';
   const roundSug = (existing && existing.suggested_points!=null) ? existing.suggested_points : null;
   const gameSug = (g.suggested_points!=null) ? g.suggested_points : null;
-  const possible = roundSug!=null ? roundSug : gameSug;
-  const curPts = (existing && existing.result_type==='punkte' && existing.points!=null) ? existing.points : (possible!=null ? possible : '');
+  const curPossibleVal = roundSug!=null ? roundSug : (gameSug!=null ? gameSug : '');
+  const curPts = (existing && existing.result_type==='punkte' && existing.points!=null) ? existing.points : '';
   const curJoker = existing && (existing.multiplier||1)>1;
   const curStrafe = existing && existing.result_type==='strafe' ? existing.target_delta : 10;
   openModal(`
@@ -343,7 +357,7 @@ function roundModal(gameId, entryId){
     <input type="text" id="r_title" value="${esc(curTitle)}" placeholder="z. B. Bierpong / Frage 1" />
 
     <label>Mögliche Punkte in dieser Runde</label>
-    <div id="r_possible" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-weight:700;">${possible!=null?(possible+' Punkte'):'–'}</div>
+    <input type="number" id="r_possible" min="0" value="${curPossibleVal}" placeholder="z. B. 20" />
 
     <label>Ergebnis</label>
     <div class="seg" id="r_typeSeg">
@@ -380,6 +394,8 @@ function roundModal(gameId, entryId){
     $('#r_typeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.t===type));
     $('#box_pts').classList.toggle('hidden', type!=='punkte');
     $('#box_strafe').classList.toggle('hidden', type!=='strafe');
+    const rp=$('#r_possible'); rp.readOnly = (type!=='offen'); rp.style.opacity = (type!=='offen')?'0.6':'1';
+    if (type==='punkte' && !$('#r_pts').value){ const p=rp.value.trim(); if(p!=='') $('#r_pts').value=p; }
   }
   function paintStrafe(){
     $('#r_strafeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on', parseInt(b.dataset.s,10)===strafe));
@@ -389,7 +405,9 @@ function roundModal(gameId, entryId){
   paintType(); paintStrafe();
 
   $('#r_save').addEventListener('click', async ()=>{
-    const payload = { game_id:g.id, round_no:storeRoundNo, title:$('#r_title').value.trim()||null, result_type:type, points:0, multiplier:1, target_delta:0, suggested_points: possible!=null?possible:null };
+    const possRaw = $('#r_possible').value.trim();
+    const possVal = possRaw===''?null:Math.max(0,parseInt(possRaw,10));
+    const payload = { game_id:g.id, round_no:storeRoundNo, title:$('#r_title').value.trim()||null, result_type:type, points:0, multiplier:1, target_delta:0, suggested_points: possVal };
     if (type==='punkte'){
       const v = parseInt($('#r_pts').value,10);
       if (isNaN(v)||v<0){ toast('Bitte gültige Punkte (0 oder mehr)'); return; }
@@ -488,14 +506,19 @@ function strafeModal(){
 }
 
 async function moveGame(id, dir){
-  const gs = sortedGames();
-  const i = gs.findIndex(g=>g.id===id);
+  const target = games.find(g=>g.id===id); if(!target) return;
+  const done = isGameDone(target);
+  const list = sortedGames().filter(g=>isGameDone(g)===done);
+  const i = list.findIndex(g=>g.id===id);
   const j = i+dir;
-  if (i<0 || j<0 || j>=gs.length) return;
-  const tmp = gs[i]; gs[i]=gs[j]; gs[j]=tmp;
-  const { error } = await Promise.all(gs.map((g,idx)=> sb.from('games').update({sort_order:idx}).eq('id',g.id)))
-    .then(()=>({error:null})).catch(e=>({error:e}));
-  if (error){ toast('Fehler beim Sortieren'); console.error(error); return; }
+  if (i<0 || j<0 || j>=list.length) return;
+  const a=list[i], b=list[j];
+  const ao=(a.sort_order==null?i:a.sort_order), bo=(b.sort_order==null?j:b.sort_order);
+  const r = await Promise.all([
+    sb.from('games').update({sort_order:bo}).eq('id',a.id),
+    sb.from('games').update({sort_order:ao}).eq('id',b.id)
+  ]).then(()=>({error:null})).catch(e=>({error:e}));
+  if (r.error){ toast('Fehler beim Sortieren'); console.error(r.error); return; }
   loadAll();
 }
 
@@ -519,9 +542,10 @@ async function undoLast(){
 }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-addround],[data-editentry],[data-del],[data-delgame],[data-editgame],[data-moveup],[data-movedown],[data-toggle]');
+  const t = e.target.closest('[data-addround],[data-editentry],[data-del],[data-delgame],[data-editgame],[data-moveup],[data-movedown],[data-toggle],[data-toggleplayed]');
   if (!t) return;
-  if (t.dataset.toggle){ const id=parseInt(t.dataset.toggle,10); openGameId = (openGameId===id)?null:id; renderGames(); }
+  if (t.dataset.toggleplayed){ showPlayed=!showPlayed; renderGames(); }
+  else if (t.dataset.toggle){ const id=parseInt(t.dataset.toggle,10); openGameId = (openGameId===id)?null:id; renderGames(); }
   else if (t.dataset.del) deleteEntry(parseInt(t.dataset.del,10));
   else if (t.dataset.delgame) deleteGame(parseInt(t.dataset.delgame,10));
   else if (t.dataset.editgame) gameEditModal(parseInt(t.dataset.editgame,10));
