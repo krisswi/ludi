@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/30256984/README.md)
 # 🎉 JGA Punkte-Tracker („Mission Ludi")
 
 Eine kleine Web-App, um bei einem Junggesellenabschied die Punkte des Junggesellen zu tracken. Alle stellen ihm Spiele und Challenges – er sammelt Punkte gegen eine Zielpunktzahl.
